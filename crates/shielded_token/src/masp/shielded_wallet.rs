@@ -357,8 +357,9 @@ impl<U: ShieldedUtils + MaybeSend + MaybeSync> ShieldedWallet<U> {
     /// Updates the internal state with the data of the newly generated
     /// transaction. More specifically invalidate the spent notes, but do not
     /// cache the newly produced output descriptions and therefore the merkle
-    /// tree
-    async fn pre_cache_transaction(
+    /// tree (this is because we don't know the exact position in the tree where
+    /// the new notes will be appended)
+    pub async fn pre_cache_transaction(
         &mut self,
         masp_tx: &Transaction,
     ) -> Result<(), eyre::Error> {
@@ -925,7 +926,6 @@ pub trait ShieldedApi<U: ShieldedUtils + MaybeSend + MaybeSync>:
         data: Vec<MaspTransferData>,
         fee_data: Option<MaspFeeData>,
         expiration: Option<DateTimeUtc>,
-        update_ctx: bool,
     ) -> Result<Option<ShieldedTransfer>, TransferErr> {
         // Determine epoch in which to submit potential shielded transaction
         let epoch = Self::query_masp_epoch(context.client())
@@ -1083,12 +1083,6 @@ pub trait ShieldedApi<U: ShieldedUtils + MaybeSend + MaybeSync>:
                 &mut RngBuildParams::new(OsRng),
             )
             .map_err(|error| TransferErr::Build { error, data: None })?;
-
-        if update_ctx {
-            self.pre_cache_transaction(&masp_tx)
-                .await
-                .map_err(|e| TransferErr::General(e.to_string()))?;
-        }
 
         Ok(Some(ShieldedTransfer {
             builder: builder_clone,
