@@ -1111,7 +1111,7 @@ mod tests {
             result
                 .expect_err("validation succeeded unexpectedly")
                 .downcast_ref::<IbcActionError>(),
-            Some(IbcActionError::Context(_)),
+            Some(IbcActionError::Handler(_)),
         ));
     }
 
