@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
 use borsh::BorshDeserialize;
+use log::{debug, error, info, warn};
 use masp_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use masp_primitives::sapling::Node;
 use masp_primitives::transaction::Transaction as MaspTx;
@@ -361,6 +362,8 @@ impl MaspClient for IndexerMaspClient {
 
         let _permit = self.shared.semaphore.acquire().await.unwrap();
 
+        debug!("Starting last block height request");
+
         let response = self
             .client
             .get(self.endpoint("/height"))
@@ -368,12 +371,41 @@ impl MaspClient for IndexerMaspClient {
             .send()
             .await
             .map_err(|err| {
+                // Log the complete error with all details
+                warn!("Last block height request failed: {:?}", err);
+                
+                // Log detailed error information
+                if err.is_timeout() {
+                    warn!("Request timed out");
+                }
+                if err.is_connect() {
+                    warn!("Connection error");
+                }
+                if err.is_redirect() {
+                    warn!("Redirect error");
+                }
+                if err.is_status() {
+                    if let Some(status) = err.status() {
+                        warn!("HTTP status error: {}", status);
+                    }
+                }
+                if err.is_decode() {
+                    warn!("Response decode error");
+                }
+                if err.is_builder() {
+                    warn!("Request builder error");
+                }
+                
                 Error::Other(format!(
                     "Failed to fetch latest block height: {err}"
                 ))
             })?;
+        
+        debug!("Last block height request successful, status: {}", response.status());
+        
         if !response.status().is_success() {
             let err = Self::get_server_error(response).await?;
+            warn!("Server error for last block height: {}", err);
             return Err(Error::Other(format!(
                 "Failed to fetch last block height: {err}"
             )));
@@ -485,6 +517,8 @@ impl MaspClient for IndexerMaspClient {
                     let _permit =
                         self.shared.semaphore.acquire().await.unwrap();
 
+                    debug!("Starting request for height range {}-{}", from_height, to_height);
+
                     let payload: TxResponse = {
                         let response = self
                             .client
@@ -497,20 +531,51 @@ impl MaspClient for IndexerMaspClient {
                             .send()
                             .await
                             .map_err(|err| {
+                                // Log the complete error with all details
+                                warn!("Request failed for height range {}-{}: {:?}", from_height, to_height, err);
+                                
+                                // Log detailed error information
+                                if err.is_timeout() {
+                                    warn!("Request timed out");
+                                }
+                                if err.is_connect() {
+                                    warn!("Connection error");
+                                }
+                                if err.is_redirect() {
+                                    warn!("Redirect error");
+                                }
+                                if err.is_status() {
+                                    if let Some(status) = err.status() {
+                                        warn!("HTTP status error: {}", status);
+                                    }
+                                }
+                                if err.is_decode() {
+                                    warn!("Response decode error");
+                                }
+                                if err.is_builder() {
+                                    warn!("Request builder error");
+                                }
+                                
                                 Error::Other(format!(
                                     "Failed to fetch transactions in the \
                                      height range {from_height}-{to_height}: \
                                      {err}"
                                 ))
                             })?;
+                        
+                        debug!("Request successful for height range {}-{}, status: {}", from_height, to_height, response.status());
+                        
                         if !response.status().is_success() {
                             let err = Self::get_server_error(response).await?;
+                            warn!("Server error for height range {}-{}: {}", from_height, to_height, err);
                             return Err(Error::Other(format!(
                                 "Failed to fetch transactions in the range \
                                  {from_height}-{to_height}: {err}"
                             )));
                         }
+                        
                         response.json().await.map_err(|err| {
+                            warn!("JSON deserialization failed for height range {}-{}: {:?}", from_height, to_height, err);
                             Error::Other(format!(
                                 "Could not deserialize the transactions JSON \
                                  response in the height range \
@@ -519,6 +584,7 @@ impl MaspClient for IndexerMaspClient {
                         })?
                     };
 
+                    debug!("Successfully processed response for height range {}-{}", from_height, to_height);
                     Ok(payload.txs)
                 });
             }
@@ -591,6 +657,8 @@ impl MaspClient for IndexerMaspClient {
 
         let _permit = self.shared.semaphore.acquire().await.unwrap();
 
+        debug!("Starting commitment tree request for height {}", height);
+        
         let response = self
             .client
             .get(self.endpoint("/commitment-tree"))
@@ -599,12 +667,41 @@ impl MaspClient for IndexerMaspClient {
             .send()
             .await
             .map_err(|err| {
+                // Log the complete error with all details
+                warn!("Commitment tree request failed for height {}: {:?}", height, err);
+                
+                // Log detailed error information
+                if err.is_timeout() {
+                    warn!("Request timed out");
+                }
+                if err.is_connect() {
+                    warn!("Connection error");
+                }
+                if err.is_redirect() {
+                    warn!("Redirect error");
+                }
+                if err.is_status() {
+                    if let Some(status) = err.status() {
+                        warn!("HTTP status error: {}", status);
+                    }
+                }
+                if err.is_decode() {
+                    warn!("Response decode error");
+                }
+                if err.is_builder() {
+                    warn!("Request builder error");
+                }
+                
                 Error::Other(format!(
                     "Failed to fetch commitment tree at height {height}: {err}"
                 ))
             })?;
+        
+        debug!("Commitment tree request successful for height {}, status: {}", height, response.status());
+        
         if !response.status().is_success() {
             let err = Self::get_server_error(response).await?;
+            warn!("Server error for commitment tree at height {}: {}", height, err);
             return Err(Error::Other(format!(
                 "Failed to fetch commitment tree at height {height}: {err}"
             )));
@@ -649,6 +746,8 @@ impl MaspClient for IndexerMaspClient {
 
         let _permit = self.shared.semaphore.acquire().await.unwrap();
 
+        debug!("Starting notes index request for height {}", height);
+        
         let response = self
             .client
             .get(self.endpoint("/notes-index"))
@@ -657,12 +756,41 @@ impl MaspClient for IndexerMaspClient {
             .send()
             .await
             .map_err(|err| {
+                // Log the complete error with all details
+                warn!("Notes index request failed for height {}: {:?}", height, err);
+                
+                // Log detailed error information
+                if err.is_timeout() {
+                    warn!("Request timed out");
+                }
+                if err.is_connect() {
+                    warn!("Connection error");
+                }
+                if err.is_redirect() {
+                    warn!("Redirect error");
+                }
+                if err.is_status() {
+                    if let Some(status) = err.status() {
+                        warn!("HTTP status error: {}", status);
+                    }
+                }
+                if err.is_decode() {
+                    warn!("Response decode error");
+                }
+                if err.is_builder() {
+                    warn!("Request builder error");
+                }
+                
                 Error::Other(format!(
                     "Failed to fetch notes map at height {height}: {err}"
                 ))
             })?;
+        
+        debug!("Notes index request successful for height {}, status: {}", height, response.status());
+        
         if !response.status().is_success() {
             let err = Self::get_server_error(response).await?;
+            warn!("Server error for notes index at height {}: {}", height, err);
             return Err(Error::Other(format!(
                 "Failed to fetch notes map at height {height}: {err}"
             )));
@@ -733,6 +861,8 @@ impl MaspClient for IndexerMaspClient {
 
         let _permit = self.shared.semaphore.acquire().await.unwrap();
 
+        debug!("Starting witness map request for height {}", height);
+
         let response = self
             .client
             .get(self.endpoint("/witness-map"))
@@ -741,12 +871,41 @@ impl MaspClient for IndexerMaspClient {
             .send()
             .await
             .map_err(|err| {
+                // Log the complete error with all details
+                warn!("Witness map request failed for height {}: {:?}", height, err);
+                
+                // Log detailed error information
+                if err.is_timeout() {
+                    warn!("Request timed out");
+                }
+                if err.is_connect() {
+                    warn!("Connection error");
+                }
+                if err.is_redirect() {
+                    warn!("Redirect error");
+                }
+                if err.is_status() {
+                    if let Some(status) = err.status() {
+                        warn!("HTTP status error: {}", status);
+                    }
+                }
+                if err.is_decode() {
+                    warn!("Response decode error");
+                }
+                if err.is_builder() {
+                    warn!("Request builder error");
+                }
+                
                 Error::Other(format!(
                     "Failed to fetch witness map at height {height}: {err}"
                 ))
             })?;
+        
+        debug!("Witness map request successful for height {}, status: {}", height, response.status());
+        
         if !response.status().is_success() {
             let err = Self::get_server_error(response).await?;
+            warn!("Server error for witness map at height {}: {}", height, err);
             return Err(Error::Other(format!(
                 "Failed to fetch witness map at height {height}: {err}"
             )));

@@ -60,6 +60,7 @@ flume = { workspace = true, optional = true }
 itertools.workspace = true
 lazy_static.workspace = true
 linkme = { workspace = true, optional = true }
+log.workspace = true
 masp_primitives.workspace = true
 masp_proofs.workspace = true
 proptest = { workspace = true, optional = true }

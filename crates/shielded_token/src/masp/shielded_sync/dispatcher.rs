@@ -4,13 +4,14 @@ use std::future::Future;
 use std::ops::ControlFlow;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{self, AtomicBool, AtomicUsize};
+use std::sync::atomic::{self, AtomicBool, AtomicUsize, AtomicU64};
 use std::task::{Context, Poll};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use eyre::{WrapErr, eyre};
 use futures::future::{Either, select};
 use futures::task::AtomicWaker;
+use log::{info, warn, error};
 use masp_primitives::merkle_tree::{CommitmentTree, IncrementalWitness};
 use masp_primitives::sapling::{Node, ViewingKey};
 use masp_primitives::transaction::Transaction;
@@ -254,6 +255,8 @@ where
     /// We are syncing up to this height
     height_to_sync: BlockHeight,
     interrupt_flag: AtomicFlag,
+    /// Counter for tracking total retries during sync
+    retry_count: AtomicU64,
 }
 
 /// Create a new dispatcher in the initial state.
@@ -305,6 +308,7 @@ where
         config,
         cache,
         interrupt_flag: Default::default(),
+        retry_count: AtomicU64::new(0),
     }
 }
 
@@ -342,16 +346,22 @@ where
 
         match std::mem::replace(&mut self.state, DispatcherState::Normal) {
             DispatcherState::Errored(err) => {
+                let retries = self.retry_count.load(atomic::Ordering::Relaxed);
+                error!("Shielded sync failed after {} retries: {}", retries, err);
                 self.finish_progress_bars();
                 self.save_cache().await;
                 Err(err)
             }
             DispatcherState::Interrupted => {
+                let retries = self.retry_count.load(atomic::Ordering::Relaxed);
+                warn!("Shielded sync interrupted after {} retries", retries);
                 self.finish_progress_bars();
                 self.save_cache().await;
                 Ok(None)
             }
             DispatcherState::Normal => {
+                let retries = self.retry_count.load(atomic::Ordering::Relaxed);
+                info!("Shielded sync completed successfully after {} retries", retries);
                 self.apply_cache_to_shielded_context(&initial_state).await?;
                 self.finish_progress_bars();
                 self.ctx.save().await.map_err(|err| {
@@ -715,6 +725,9 @@ where
         }
 
         if self.config.retry_strategy.may_retry() {
+            // Increment retry counter
+            let current_retries = self.retry_count.fetch_add(1, atomic::Ordering::Relaxed);
+            info!("MaspClient retry #{}, error: {}", current_retries + 1, error);
             true
         } else {
             // NB: store last encountered error

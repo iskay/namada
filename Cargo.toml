@@ -188,6 +188,7 @@ libc = "0.2"
 libfuzzer-sys = "0.4"
 libloading = "0.8"
 linkme = "0.3"
+log = "0.4"
 madato = "0.7"
 masp_primitives = { version = "1.4" }
 masp_proofs = { version = "1.4", default-features = false, features = ["local-prover"] }
